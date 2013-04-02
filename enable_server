@@ -1,0 +1,106 @@
+#!/bin/bash
+#
+# Synopsis:
+#     Disables monitoring for a list of servers received on stdin.
+#
+# Expects
+#     yaml_file_name\tlast_ran\thost_name
+#
+# For example:
+#
+# Disable server where puppet has not seen it for between 2 and 100 days.
+#
+# ./puppet_last_run_delta name | \
+#      ./prune_results col_value_compare 1 le $((2*24*60*60)) | \
+#      ./disable_server
+#
+# ./puppet_last_run_delta name | ./prune_results col_value_compare 2 gt $((2*24*60*60)) | ./prune_results col_value_compare 2 lt $((100*24*60*60)) | ./disable_server
+#
+
+if [[ -r config.conf ]]; then
+    . config.conf
+else
+    echo "No config.conf file found"
+    exit 1
+fi
+
+[[ $BRIEF -eq 0 ]] && echo -e "\n#\n# enable_server run started on `date`\n#\n"
+
+# Check LOC list
+[[ $BRIEF -eq 0 ]] && echo -n "Checking servers... "
+theres_a_problem=0
+for RESTSVR in $LOC ;do
+    res=`curl $OPTS -sfkn 'https://'${RESTSVR%%,*}'/rest/show/hosts?json=\{"folder":"'${RESTSVR##*,}'","filter":"qWeRtY"\}'`
+    [[ $? -ne 0 ]] && { 
+        echo "Problem with:"
+        echo "    curl $OPTS -fkn 'https://${RESTSVR%%,*}/rest/show/hosts?json=\{\"folder\":\"${RESTSVR##*,}\",\"filter\":\"qWeRtY\"\}'"
+        exit 1
+    }
+done
+[[ $theres_a_problem -eq 1 ]] && exit 1
+
+[[ $BRIEF -eq 0 ]] && echo "OK."
+
+touch $ES_CACHEFILE
+
+#
+# Read in the work list from stdin
+#
+
+while IFS=`echo -en "\t"` read yaml lastrun hst nul; do
+    workhost="${hst/ /}"
+    [[ $STRIPDOM -eq 1 ]] && workhost="${workhost%%.*}"
+
+    # Search for the workhost on all nagrestconf servers listed in LOC.
+    # Use the value from the cache if there is one.
+    found=0
+    if grepline=`grep "^ *${workhost} " $ES_CACHEFILE`; then
+        # Use the cache value
+        RESTSVR="${grepline#* }"
+        found=1
+    else
+        # Try REST to see where workhost lives
+        for RESTSVR in $LOC ;do
+            res=`curl $OPTS -skn 'https://'${RESTSVR%%,*}'/rest/show/hosts?json=\{"folder":"'${RESTSVR##*,}'","filter":"'${workhost}'"\}'`
+            [[ $res != '[]' ]] && { found=1 ; break ; }
+        done
+        [[ $found -eq 1 ]] && {
+            # Update the cache file
+            sed -i "/^ *${workhost} /d" $ES_CACHEFILE
+            echo "${workhost} $RESTSVR" >>$ES_CACHEFILE
+        }
+    fi
+
+    # Enable the host if not already enabled. Must enable host before associated services.
+    if [[ $found -eq 1 ]]; then
+        [[ $BRIEF -eq 0 ]] && echo "${workhost} found on $RESTSVR"
+        dis=`curl $OPTS -skn 'https://'${RESTSVR%%,*}'/rest/show/hosts?json=\{"folder":"'${RESTSVR##*,}'","filter":"'${workhost}'"\}' | $JSON -b | grep '\[[0-9]*,9,' | tr -d \" | while IFS=$(echo -en "\t") read a b; do echo $b; done`
+        [[ $dis -eq 0 ]] && { [[ $BRIEF -eq 0 ]] && echo "  $workhost already enabled"; continue; }
+        echo "  ENABLING $workhost"
+        # Disable host
+        curl $OPTS -sknX POST -d 'json={"folder":"'${RESTSVR##*,}'",
+            "name":"'${workhost}'",
+            "disable":"0"}' \
+            https://${RESTSVR%%,*}/rest/modify/hosts
+        # Disable services
+        curl $OPTS -skn 'https://'${RESTSVR%%,*}'/rest/show/services?json=\{"folder":"'${RESTSVR##*,}'","filter":"'${workhost}'"\}' \
+            | $JSON -b | grep '\[[0-9]*,3,' | tr -d \" | \
+            while IFS=$(echo -en "\t") read a b; do 
+                curl $OPTS -fsknX POST -d 'json={"folder":"'${RESTSVR##*,}'",
+                    "name":"'${workhost}'",
+                    "svcdesc":"'"$b"'",
+                    "disable":"0"}' \
+                    https://${RESTSVR%%,*}/rest/modify/services >/dev/null
+                if [[ $? -ne 0 ]]; then
+                    echo -n "x"
+                else
+                    echo -n "."
+                fi
+            done
+    else
+        [[ $BRIEF -eq 0 ]] && echo "${workhost} not found"
+    fi
+done
+
+exit 0
+

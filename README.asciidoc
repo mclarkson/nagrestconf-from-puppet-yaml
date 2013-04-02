@@ -1,0 +1,153 @@
+Monitoring Automation
+=====================
+
+This works pretty well when servers have a complex naming convention and a simple regex can work out what the server is/does.
+
+The Scripts
+-----------
+
+[cols="<,<",frame="topbot",options="autowidth"]
+|====
+| setup_dev_monitoring | Runs everything - suitable for cron. |
+| puppet_last_run_delta | Used to create the initial result set from Puppet facts |
+| prune_results | Used to reduce a result set. Produces a filtered result set |
+| disable_server | Takes a result set and disables servers. |
+| enable_server | Takes a result set and enables servers. |
+| add_new_server | Takes a result set and adds new servers. |
+| add_disk_device | Takes a result set and adds disk devices. |
+| apply_and_restart_all | Applies configurations and restarts workers. |
+| config.conf | Configuration file for all scripts. |
+| JSON.sh | Used by scripts to read json data from REST queries. |
+| test_query | A template to copy from. Shows how to query. |
+| test_update | A template to copy from. Shows how to update the configuration. |
+|====
+
+setup_dev_monitoring
+--------------------
+
+setup_dev_monitoring calls the other scripts in a sensible order and calls apply_and_restart_all at the end. This script includes timing information and is suitable for cron, especially when 'BRIEF=1' is set in config.conf.
+
+puppet_last_run_delta
+---------------------
+
+With no arguments it produces two columns of tab delimited output from puppet facts. First column is the yaml file name and second column is seconds since the host last checked in. Example:
+
+{code}
+$ ./puppet_last_run_delta
+...
+tw02ws2203.dmi.dev.local.yaml  4211843
+tw02ws2205.dmi.dev.local.yaml  4211844
+...
+{code}
+
+More columns can be added by adding the fact name to the argument list. Example
+
+{code}
+$ ./puppet_last_run_delta hostname ipaddress
+..
+ti01test2202.dmi.dev.local.yaml 17536097        ti01test2202   192.168.31.3
+ti01test2203.dmi.dev.local.yaml 17621897        ti01test2203   192.168.31.4
+..
+{code}
+
+prune_results
+-------------
+
+Pipe a result list to prune_results. With no arguments input is copied to output. Pipe many prune_results together to create complex queries. Available filters are:
+
+| col_value_regex | compare column to regular expression |
+| col_value_neg_regex | compare column to regular expression then negate the output |
+| col_value_compare | compare column value to a value (binary comparison) |
+
+Example: Just show servers beginning with 'tx00' that have connected in the last 24 hours.
+
+{code}
+$ ./puppet_last_run_delta name | \
+     ./prune_results col_value_compare 2 le $((1*24*60*60)) | \
+     ./prune_results col_value_regex 1 "^tx00"
+...
+tx00asp2202.dmi.dev.local.yaml  548     tx00asp2202.dmi.dev.local
+tx00asp2203.dmi.dev.local.yaml  1034    tx00asp2203.dmi.dev.local
+...
+{code}
+
+disable_server
+--------------
+
+Pipe a result list to disable_server to disable it. It expects to receive data in the format:
+
+| yaml file name | tab | seconds since last check in | tab | name |
+
+disable_server makes sure it can reach all nagios workers using REST and will quit with an error if it fails. It also caches results in /var/tmp/disable_server_<userid>.cache - this can be deleted to force a full scan.
+
+It checks to see if the host exists in monitoring and if so it disables the services first followed by the host itself. Disabled services and hosts have a yellow background in the nagrestconf GUI. Disabling a server is a [nagrestconf|http://www.smorg.co.uk] feature.
+
+enable_server
+-------------
+
+Pipe a result list to enable_server to enable it. It expects to receive data in the format:
+
+| yaml file name | tab | seconds since last check in | tab | name |
+
+enable_server makes sure it can reach all nagios workers using REST and will quit with an error if it fails. It also caches results in /var/tmp/enable_server_<userid>.cache - this can be deleted to force a full scan.
+
+It checks to see if the host exists in monitoring and if so it enables the host first followed by the services.
+
+add_new_server
+--------------
+
+Pipe a result list to enable_server to enable it. It expects to receive data in the format:
+
+| yaml file name | tab | seconds since last check in | tab | name | tab | ip address |
+
+add_new_server makes sure it can reach all nagios workers using REST and will quit with an error if it fails. It also caches results in /var/tmp/add_new_server_<userid>.cache - this can be deleted to force a full scan.
+
+It uses regular expressions to match hosts to workers, hosts to host groups and hosts to service sets. For example, all hosts starting with 'tm02' are added to the tm02nag2201 nagios worker; hosts containing the word 'auth' will be put in the Security host group; hosts containing the word 'bld' will be set up with the 'puppetmaster-checks' service set. Service sets are a [nagrestconf|http://www.smorg.co.uk] feature.
+
+add_disk_device
+---------------
+
+Pipe a result list to add_disk_device to add disks to it. It expects to receive data in the format:
+
+| yaml file name | tab | seconds since last check in | tab | name | tab | disks csv |
+
+add_disk_device makes sure it can reach all nagios workers using REST and will quit with an error if it fails. It also caches results in /var/tmp/add_disk_device_<userid>.cache - this can be deleted to force a full scan.
+
+It adds a 'Disk stat <diskname>' nagios check that uses the [check_diskstat|http://exchange.nagios.org/directory/Plugins/Software/check_diskstat/details] check.
+
+apply_and_restart_all
+---------------------
+
+Tells all nagios workers to apply their configs and restart. They will also copy their config up to the central nagios server using subversion mirroring.
+
+config.conf
+-----------
+
+[cols="<,<",frame="topbot",options="header,autowidth"]
+|====
+| Variable | Description |
+| FACTSDIR | Location of Puppet's yaml facts directory. |
+| JSON | File location of the JSON.sh script |
+| OPTS | Curl extra options |
+| LOC | List of nagios workers. Format: LOC="IP,folder \[IP,folder \]..." |
+| STRIPDOM | Only use the hostname in REST 'name' parameters. |
+| BRIEF | Brief output - better for cron. |
+| ADD_CACHEFILE | file location for add_disk_device cache file |
+| DS_CACHEFILE | file location for disable_server cache file |
+| ES_CACHEFILE | file location for enable_server cache file |
+| ANS_CACHEFILE | file location for add_new_server cache file |
+| SRVR_REGX | Regex telling which nagrestconf server to add hosts to. Format "server regex". |
+| HOSTGRP_REGX | Regex telling which hostgroup to put hosts in. Format "hostgroup regex". |
+| SVCSET_REGX | Regex telling which serviceset to put hosts in. Format "serviceset regex". |
+|====
+
+JSON.sh
+-------
+
+Got from [https://github.com/dominictarr/JSON.sh]
+
+test_query and test_update
+--------------------------
+
+These working scripts can be used as templates to create new automated tasks.
+

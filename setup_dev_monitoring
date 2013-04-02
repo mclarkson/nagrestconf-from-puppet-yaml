@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# Rationale:
+#   There are too many downed servers in Dev making monitoring more
+#   difficult and complex than it should be.
+#   Many servers are not monitored because the nagios admin was not
+#   told about them, but all servers in dev should be monitored
+#   (except those for the test lab).
+#   All servers check in with a Puppet master a few times each day.
+#   Puppet facts show the status of all servers.
+#   The Puppet facts can be checked periodically and the monitoring
+#   configuration adjusted depending on changes. These are slow
+#   moving configuration changes, and servers are disabled rather
+#   than deleted in the nagios configuration. This suits dev.
+#
+# Logic:
+#   1. DISABLE any servers that puppet has not seen for ages. (2 days)
+#   2. ENABLE all servers that have been seen recently. (Today)
+#   3. ADD NEW servers that have been seen recently. (Today)
+#      a) Add a THIS_IS_A_NEW_SERVER check_dummy check to show
+#         that the server was added automatically.
+#   4. Add disk stats service checks to all servers.
+#
+# Changes are needed to scale to thousands of servers. This can handle
+# hundreds of servers fine though.
+#
+# Example cron:
+#    16 * * * * ( cd $HOME/nagios-automation/puppet_queries ; ./setup_dev_monitoring )
+
+dur_start=`date +%s`
+# echo -e "\n#\n# setup_dev_monitoring started at `date`\n#\n"
+
+LOG="/var/tmp/setup_dev_monitoring.out"
+touch $LOG
+
+while true; do
+
+#   1. DISABLE any servers that puppet have not seen for ages. (2 days)
+
+./puppet_last_run_delta name | \
+     ./prune_results col_value_compare 2 gt $((2*24*60*60)) | \
+     ./prune_results col_value_compare 2 lt $((5*24*60*60)) | \
+     ./disable_server >$LOG 2>&1
+
+[[ $? -ne 0 ]] && break
+
+#   2. ENABLE all servers that have been seen recently. (Today)
+
+./puppet_last_run_delta name | \
+     ./prune_results col_value_compare 2 le $((1*24*60*60)) | \
+     ./prune_results col_value_neg_regex 1 "^tl.*" | \
+     ./enable_server >>$LOG 2>&1
+
+[[ $? -ne 0 ]] && break
+
+#   3. ADD NEW servers that have been seen recently. (Today)
+
+./puppet_last_run_delta name ipaddress | \
+     ./prune_results col_value_compare 2 le $((1*24*60*60)) | \
+     ./prune_results col_value_neg_regex 1 "^tl.*" | \
+     ./add_new_server >>$LOG 2>&1
+
+[[ $? -ne 0 ]] && break
+
+#   4. Add disk stats service checks to all servers.
+
+./puppet_last_run_delta name disks | \
+     ./prune_results numitems_in_col 4 , le 6 | \
+     ./prune_results col_value_compare 2 lt $((48*60*60)) | \
+     ./prune_results col_value_neg_regex 1 "^tl.*" | \
+     ./add_disk_device >>$LOG 2>&1
+
+[[ $? -ne 0 ]] && break
+
+./apply_and_restart_all
+
+break ; done
+
+dur_end=`date +%s`
+dur=$((($dur_end-$dur_start)/60))
+
+[[ -s $LOG ]] && {
+    echo -e "\n#\n# setup_dev_monitoring finished at `date` ($dur minutes)\n#\n"
+    cat $LOG
+    exit 1
+}
+
+exit 0

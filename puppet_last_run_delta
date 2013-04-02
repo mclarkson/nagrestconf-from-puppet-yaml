@@ -1,0 +1,40 @@
+#!/bin/bash
+
+if [[ -r config.conf ]]; then
+    . config.conf
+else
+    echo "No config.conf file found"
+    exit 1
+fi
+
+[[ ! -d $FACTSDIR || ! -r $FACTSDIR ]] && {
+    echo "Can't access /var/lib/puppet/yaml/facts directory"
+    exit 0
+}
+
+cd $FACTSDIR
+
+#
+# Create a tab delimited list from puppet Facts, e.g.:
+#
+#     $ puppet_last_run_delta disks memorysize
+#     xxxappxx04.xxx.dev.local\t1.2.3.4\tsda,sdb\t1024 MB
+#
+
+# '!ruby/sym ' is a facter/puppet bug. See:
+# http://projects.puppetlabs.com/issues/5377
+
+grep -m 1 " _timestamp:" * | sed 's#!ruby/sym ##' | \
+    while read a b c; do
+        _then=`date -d "$c" +%s`
+        _now=`date +%s`
+        echo -en "${a//:/}\t$((_now-_then))\t"
+        for i in $@ ; do
+            line=`grep -m 1 "^ *$i:" ${a//:/}`
+            echo -en "${line#*:}\t" | tr -d \"
+        done
+        echo
+    done | sed 's/\t */\t/g;'
+
+exit 0
+

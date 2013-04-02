@@ -1,0 +1,154 @@
+#!/bin/bash
+#
+# Synopsis:
+#     Disables monitoring for a list of servers received on stdin.
+#
+# Expects
+#     yaml_file_name\tlast_ran\thost_name
+#
+# For example:
+#
+# Disable server where puppet has not seen it for between 2 and 100 days.
+#
+# ./puppet_last_run_delta name | \
+#      ./prune_results col_value_compare 1 le $((2*24*60*60)) | \
+#      ./disable_server
+#
+# ./puppet_last_run_delta name | ./prune_results col_value_compare 2 gt $((2*24*60*60)) | ./prune_results col_value_compare 2 lt $((100*24*60*60)) | ./disable_server
+#
+
+if [[ -r config.conf ]]; then
+    . config.conf
+else
+    echo "No config.conf file found"
+    exit 1
+fi
+
+[[ $BRIEF -eq 0 ]] && echo -e "\n#\n# disable_server run started on `date`\n#\n"
+
+# Check LOC list
+[[ $BRIEF -eq 0 ]] && echo -n "Checking servers... "
+theres_a_problem=0
+for RESTSVR in $LOC ;do
+    res=`curl $OPTS -sfkn 'https://'${RESTSVR%%,*}'/rest/show/hosts?json=\{"folder":"'${RESTSVR##*,}'","filter":"qWeRtY"\}'`
+    [[ $? -ne 0 ]] && { 
+        echo "Problem with:"
+        echo "    curl $OPTS -fkn 'https://${RESTSVR%%,*}/rest/show/hosts?json=\{\"folder\":\"${RESTSVR##*,}\",\"filter\":\"qWeRtY\"\}'"
+        exit 1
+    }
+done
+[[ $theres_a_problem -eq 1 ]] && exit 1
+
+[[ $BRIEF -eq 0 ]] && echo "OK."
+
+touch $ANS_CACHEFILE
+
+#
+# Read in the work list from stdin
+#
+
+while IFS=`echo -en "\t"` read yaml lastrun hst ipaddr nul; do
+    workhost="${hst/ /}"
+    [[ $STRIPDOM -eq 1 ]] && workhost="${workhost%%.*}"
+
+    # Search for the workhost on all nagrestconf servers listed in LOC.
+    # Use the value from the cache if there is one.
+    found=0
+    if grepline=`grep "^ *${workhost} " $ANS_CACHEFILE`; then
+        # Use the cache value
+        RESTSVR="${grepline#* }"
+        found=1
+    else
+        # Try REST to see where workhost lives
+        for RESTSVR in $LOC ;do
+            res=`curl $OPTS -skn 'https://'${RESTSVR%%,*}'/rest/show/hosts?json=\{"folder":"'${RESTSVR##*,}'","filter":"'${workhost}'"\}'`
+            [[ $res != '[]' ]] && { found=1 ; break ; }
+        done
+        [[ $found -eq 1 ]] && {
+            # Update the cache file
+            sed -i "/^ *${workhost} /d" $ANS_CACHEFILE
+            echo "${workhost} $RESTSVR" >>$ANS_CACHEFILE
+        }
+    fi
+
+    # Add the host if it does not exist, otherwise bug out
+    if [[ $found -eq 0 ]]; then
+        #echo "${workhost} not found."
+        while read -r svr regx; do
+            if echo "$workhost" | grep -qs "$regx"; then
+                found=1 # reusing found
+                break
+            fi
+        done < <( echo "$SRVR_REGX" )
+        if [[ $found -eq 1 ]]; then
+            found=0
+            # Find hostgroup from name
+            while read -r hstgrp regx; do
+                if echo "$workhost" | grep -qs "$regx"; then
+                    found=1
+                    break
+                fi
+            done < <( echo "$HOSTGRP_REGX" )
+            [[ $found -eq 0 ]] && hstgrp="test"
+            found=0
+            # Find serviceset from name
+            while read -r svcset regx; do
+                if echo "$workhost" | grep -qs "$regx"; then
+                    found=1
+                    break
+                fi
+            done < <( echo "$SVCSET_REGX" )
+            [[ $found -eq 0 ]] && svcset="pingonly-check"
+
+            echo "Adding $workhost to $svr in '$hstgrp' hostgroup using '$svcset' serviceset."
+
+            # Find RESTSVR in LOC
+            found=0
+            for RESTSVR in $LOC ;do
+                [[ ${RESTSVR##*,} == $svr ]] && {
+                    found=1
+                    break;
+                }
+            done
+
+            # Add the host to monitoring using service sets
+
+            if [[ $found -eq 1 ]]; then
+                echo -n "  Adding $workhost to ${RESTSVR##*,} at ${RESTSVR%%,*}"
+                curl $OPTS -fknX POST -d 'json={"folder":"'${RESTSVR##*,}'",
+                    "name":"'${workhost}'",
+                    "alias":"'${workhost}'",
+                    "ipaddress":"'${ipaddr# }'",
+                    "template":"std_htmpl",
+                    "hostgroup":"'"${hstgrp}"'",
+                    "servicesets":"'"${svcset}"'"}' \
+                    https://${RESTSVR%%,*}/rest/add/hosts 2>/var/tmp/ansoutput.err >/var/tmp/ansoutput.out
+                if [[ $? -ne 0 ]]; then
+                    echo -n " .. FAIL (`tail -1 /var/tmp/ansoutput.err`)"
+cat <<EnD
+curl $OPTS -fknX POST -d 'json={"folder":"'${RESTSVR##*,}'",
+    "name":"'${workhost}'",
+    "alias":"'${workhost}'",
+    "ipaddress":"'$ipaddr'",
+    "template":"std_htmpl",
+    "hostgroup":"'"${hstgrp}"'",
+    "servicesets":"'"${svcset}"'"}' \
+    https://${RESTSVR%%,*}/rest/add/hosts 2>/var/tmp/ansoutput.err >/var/tmp/ansoutput.out
+EnD
+                else
+                    echo -n " .. SUCCESS (`tail -1 /var/tmp/ansoutput.out`)"
+                fi
+                #rm -f /var/tmp/ansoutput.out /var/tmp/ansoutput.err
+            else
+                echo "  Server details for '$svr' not set in LOC variable, skipping."
+            fi
+        else
+            echo "Don't know where to put $workhost"
+        fi
+    else
+        [[ $BRIEF -eq 0 ]] && echo "${workhost} exists, skipping."
+    fi
+done
+
+exit 0
+

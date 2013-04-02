@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [[ -r config.conf ]]; then
+    . config.conf
+else
+    echo "No config.conf file found"
+    exit 0
+fi
+
+# Apply nagios configs and restart
+for RESTSVR in $LOC ;do
+    FOLDER="${RESTSVR##*,}"
+    IP="${RESTSVR%%,*}"
+    curl $OPTS -fsknX POST -d 'json={"folder":"'$FOLDER'"}' https://$IP/rest/apply/nagiosconfig \
+        2>/var/tmp/ansoutput.err >/var/tmp/ansoutput.out
+    if [[ $? -ne 0 ]]; then
+        echo -n " apply/nagiosconfig for $RESTSVR .. FAIL (`tail -1 /var/tmp/ansoutput.err`)"
+    fi
+    curl $OPTS -fsknX POST -d 'json={"folder":"'$FOLDER'"}' https://$IP/rest/restart/nagios \
+        2>/var/tmp/ansoutput.err >/var/tmp/ansoutput.out
+    if [[ $? -ne 0 ]]; then
+        echo -n " restart/nagios for $RESTSVR .. FAIL (`tail -1 /var/tmp/ansoutput.err`)"
+    fi
+done
+

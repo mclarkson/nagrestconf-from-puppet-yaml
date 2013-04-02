@@ -1,0 +1,65 @@
+#!/bin/bash
+
+x=0
+
+# ---------------------------------------------------------------------------
+col_value_neg_regex() {
+# ---------------------------------------------------------------------------
+# $1 Column
+# $2 regex
+#
+# E.g. col_value 2 le 6000
+    local items
+    eval [[ "${A[$(($1-1))]}" =~ $2 ]] && return 1
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+col_value_regex() {
+# ---------------------------------------------------------------------------
+# $1 Column
+# $2 regex
+#
+# E.g. col_value 2 le 6000
+    local items
+    eval [[ "${A[$(($1-1))]}" =~ $2 ]] && return 0
+    return 1
+}
+
+# ---------------------------------------------------------------------------
+col_value_compare() {
+# ---------------------------------------------------------------------------
+# $1 Column
+# $2 boolean operator (lt gt eq ne le ge)
+# $3 comparison value
+#
+# E.g. col_value 2 le 6000
+    local items
+    eval [[ "${A[$(($1-1))]}" -$2 $3 ]] && return 0
+    return 1
+}
+
+# ---------------------------------------------------------------------------
+numitems_in_col() {
+# ---------------------------------------------------------------------------
+# $1 Column
+# $2 Separator
+# $3 boolean operator (lt gt eq ne le ge)
+# $4 comparison value
+#
+# E.g. numitems_in_col 3 , le 6
+    local items
+    IFS=$2 read -a items < <(echo "${A[$(($1-1))]}")
+    eval [[ "${#items[*]}" -$3 $4 ]] && return 0
+    return 1
+}
+
+declare -a A
+
+while read line; do
+    IFS=`echo -en "\t"` read -a A < <(echo "$line")
+    if `$@`; then echo "$line"; fi
+done
+
+exit 0
+
