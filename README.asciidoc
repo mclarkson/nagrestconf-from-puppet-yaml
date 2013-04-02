@@ -32,23 +32,23 @@ puppet_last_run_delta
 
 With no arguments it produces two columns of tab delimited output from puppet facts. First column is the yaml file name and second column is seconds since the host last checked in. Example:
 
-{code}
+-------------------------------------------
 $ ./puppet_last_run_delta
 ...
 xx02xxxx03.dmi.dev.local.yaml  4211843
 xx02xxxx05.dmi.dev.local.yaml  4211844
 ...
-{code}
+-------------------------------------------
 
 More columns can be added by adding the fact name to the argument list. Example
 
-{code}
+-------------------------------------------
 $ ./puppet_last_run_delta hostname ipaddress
 ..
 xx01testxx02.local.yaml 17536097        xx01testxx02   1.2.3.3
 xx01testxx03.local.yaml 17621897        xx01testxx03   1.2.3.4
 ..
-{code}
+-------------------------------------------
 
 prune_results
 -------------
@@ -61,7 +61,7 @@ Pipe a result list to prune_results. With no arguments input is copied to output
 
 Example: Just show servers beginning with 'tx00' that have connected in the last 24 hours.
 
-{code}
+-------------------------------------------
 $ ./puppet_last_run_delta name | \
      ./prune_results col_value_compare 2 le $((1*24*60*60)) | \
      ./prune_results col_value_regex 1 "^tx00"
@@ -69,7 +69,7 @@ $ ./puppet_last_run_delta name | \
 xxxxxxxxx02.dev.local.yaml  548     xxxxxxxxx02.dev.local
 xxxxxxxxx03.dev.local.yaml  1034    xxxxxxxxx03.dev.local
 ...
-{code}
+-------------------------------------------
 
 disable_server
 --------------
