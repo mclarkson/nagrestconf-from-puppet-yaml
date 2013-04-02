@@ -8,18 +8,18 @@ The Scripts
 
 [cols="<,<",frame="topbot",options="autowidth"]
 |====
-| setup_dev_monitoring | Runs everything - suitable for cron. |
-| puppet_last_run_delta | Used to create the initial result set from Puppet facts |
-| prune_results | Used to reduce a result set. Produces a filtered result set |
-| disable_server | Takes a result set and disables servers. |
-| enable_server | Takes a result set and enables servers. |
-| add_new_server | Takes a result set and adds new servers. |
-| add_disk_device | Takes a result set and adds disk devices. |
-| apply_and_restart_all | Applies configurations and restarts workers. |
-| config.conf | Configuration file for all scripts. |
-| JSON.sh | Used by scripts to read json data from REST queries. |
-| test_query | A template to copy from. Shows how to query. |
-| test_update | A template to copy from. Shows how to update the configuration. |
+| setup_dev_monitoring | Runs everything - suitable for cron.
+| puppet_last_run_delta | Used to create the initial result set from Puppet facts
+| prune_results | Used to reduce a result set. Produces a filtered result set
+| disable_server | Takes a result set and disables servers.
+| enable_server | Takes a result set and enables servers.
+| add_new_server | Takes a result set and adds new servers.
+| add_disk_device | Takes a result set and adds disk devices.
+| apply_and_restart_all | Applies configurations and restarts workers.
+| config.conf | Configuration file for all scripts.
+| JSON.sh | Used by scripts to read json data from REST queries.
+| test_query | A template to copy from. Shows how to query.
+| test_update | A template to copy from. Shows how to update the configuration.
 |====
 
 setup_dev_monitoring
@@ -125,20 +125,20 @@ config.conf
 
 [cols="<,<",frame="topbot",options="header,autowidth"]
 |====
-| Variable | Description |
-| FACTSDIR | Location of Puppet's yaml facts directory. |
-| JSON | File location of the JSON.sh script |
-| OPTS | Curl extra options |
-| LOC | List of nagios workers. Format: LOC="IP,folder \[IP,folder \]..." |
-| STRIPDOM | Only use the hostname in REST 'name' parameters. |
-| BRIEF | Brief output - better for cron. |
-| ADD_CACHEFILE | file location for add_disk_device cache file |
-| DS_CACHEFILE | file location for disable_server cache file |
-| ES_CACHEFILE | file location for enable_server cache file |
-| ANS_CACHEFILE | file location for add_new_server cache file |
-| SRVR_REGX | Regex telling which nagrestconf server to add hosts to. Format "server regex". |
-| HOSTGRP_REGX | Regex telling which hostgroup to put hosts in. Format "hostgroup regex". |
-| SVCSET_REGX | Regex telling which serviceset to put hosts in. Format "serviceset regex". |
+| Variable | Description
+| FACTSDIR | Location of Puppet's yaml facts directory.
+| JSON | File location of the JSON.sh script
+| OPTS | Curl extra options
+| LOC | List of nagios workers. Format: LOC="IP,folder \[IP,folder \]..."
+| STRIPDOM | Only use the hostname in REST 'name' parameters.
+| BRIEF | Brief output - better for cron.
+| ADD_CACHEFILE | file location for add_disk_device cache file
+| DS_CACHEFILE | file location for disable_server cache file
+| ES_CACHEFILE | file location for enable_server cache file
+| ANS_CACHEFILE | file location for add_new_server cache file
+| SRVR_REGX | Regex telling which nagrestconf server to add hosts to. Format "server regex".
+| HOSTGRP_REGX | Regex telling which hostgroup to put hosts in. Format "hostgroup regex".
+| SVCSET_REGX | Regex telling which serviceset to put hosts in. Format "serviceset regex".
 |====
 
 JSON.sh
