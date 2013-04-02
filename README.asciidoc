@@ -1,5 +1,5 @@
 Monitoring Automation
-=====================
+---------------------
 
 This works pretty well when servers have a complex naming convention and a simple regex can work out what the server is/does.
 
