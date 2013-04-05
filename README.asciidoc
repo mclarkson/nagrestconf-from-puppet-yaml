@@ -1,7 +1,13 @@
-Monitoring Automation
----------------------
+Monitoring Automation Using Puppet Yaml Files
+---------------------------------------------
 
-This works pretty well when servers have a complex naming convention and a simple regex can work out what the server is/does.
+The puppet yaml fact files contain lots of information about servers in a Puppet managed estate.
+
+The scripts here can be used filter that information and then send REST commands to a nagios server.
+
+Servers can be automatically added to and removed from nagios and checks dynamically added/removed.
+
+This works pretty well especially when servers have a complex naming convention where a simple regex can work out what the server is/does.
 
 The Scripts
 -----------
