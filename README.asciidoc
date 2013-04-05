@@ -5,7 +5,7 @@ The puppet yaml fact files contain lots of information about servers in a Puppet
 
 The scripts here can be used filter that information and then send REST commands to a nagios server.
 
-Servers can be automatically added to and removed from nagios and checks dynamically added/removed.
+Servers and service checks can be automatically added to and removed from nagios.
 
 This works pretty well especially when servers have a complex naming convention where a simple regex can work out what the server is/does.
 
@@ -17,11 +17,11 @@ The Scripts
 | setup_dev_monitoring | Runs everything - suitable for cron.
 | puppet_last_run_delta | Used to create the initial result set from Puppet facts
 | prune_results | Used to reduce a result set. Produces a filtered result set
-| disable_server | Takes a result set and disables servers.
-| enable_server | Takes a result set and enables servers.
-| add_new_server | Takes a result set and adds new servers.
-| add_disk_device | Takes a result set and adds disk devices.
-| apply_and_restart_all | Applies configurations and restarts workers.
+| disable_server | Takes a result set and disables servers using nagrestconf.
+| enable_server | Takes a result set and enables servers using nagrestconf.
+| add_new_server | Takes a result set and adds new servers using nagrestconf.
+| add_disk_device | Takes a result set and adds disk devices using nagrestconf.
+| apply_and_restart_all | Applies configurations and restarts nagios workers via nagrestconf.
 | config.conf | Configuration file for all scripts.
 | JSON.sh | Used by scripts to read json data from REST queries.
 | test_query | A template to copy from. Shows how to query.
@@ -137,7 +137,7 @@ config.conf
 | OPTS | Curl extra options
 | LOC | List of nagios workers. Format: LOC="IP,folder \[IP,folder \]..."
 | STRIPDOM | Only use the hostname in REST 'name' parameters.
-| BRIEF | Brief output - better for cron.
+| BRIEF | Brief output - better for cron as output is only produced when a change is made or an error occurs.
 | ADD_CACHEFILE | file location for add_disk_device cache file
 | DS_CACHEFILE | file location for disable_server cache file
 | ES_CACHEFILE | file location for enable_server cache file
